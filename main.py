@@ -255,8 +255,9 @@ for epoch in range(1, 10):
 _, _, args.C0 = test(source_test_loader)
 args.C_list.append( args.C0 )
 args.step, args.lumbda = 0, args.lumbda_max
-
 args.num_step, args.num_epoch = 25, 8
+
+#####An equilibrium process for transfer learning: keepliing the classicifation loss
 for k in range( args.num_step ): 
     args.r = ( k +1 )/args.num_step 
     _, _, C1 = test(source_test_loader)
