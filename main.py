@@ -71,19 +71,32 @@ args.model.have_cuda = args.cuda
 if args.cuda:
     args.model.cuda()
 
-criterion = nn.CrossEntropyLoss()
+#criterion = nn.CrossEntropyLoss()
+criterion = torch.nn.CrossEntropyLoss( size_average=False, reduction='sum')
 optimizer = optim.Adam(args.model.parameters(), lr=1e-3)
 
+#loss function
+def loss_function(recon_x, x, pred, y, mu, logvar, num_z):
+    xx = torch.cat([x.view(-1, 3, 32, 32)]* num_z)
+    MSE = F.mse_loss(recon_x, xx, reduction='sum')/num_z    
+    #MSE = F.mse_loss(recon_x, x, reduction='sum')
+    #MSE = F.binary_cross_entropy(recon_x, x, reduction='sum')
+    KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+    yy = torch.cat([y]*num_z)
+    #c = criterion_loss( pred, y ) 
+    c = criterion(pred, yy)
+    return KLD, MSE, c/num_z
+
 # Reconstruction + KL divergence losses summed over all elements and batch
-def loss_function(recon_x, x, mu, logvar):
+##def loss_function(recon_x, x, mu, logvar):
     # print(recon_x.size(), x.size())
-    BCE = F.binary_cross_entropy(recon_x.view(-1, 784), x.view(-1, 784), size_average=False)
+#    BCE = F.binary_cross_entropy(recon_x.view(-1, 784), x.view(-1, 784), size_average=False)
     # see Appendix B from VAE paper:
     # Kingma and Welling. Auto-Encoding Variational Bayes. ICLR, 2014
     # https://arxiv.org/abs/1312.6114
     # 0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
-    KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-    return BCE, KLD
+#    KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+ #   return BCE, KLD
     
     
 ########
@@ -135,14 +148,13 @@ def train(epoch):
         optimizer.zero_grad()
 
         recon_batch, mu, logvar, pred = args.model(data)
-        BCE, KLD = loss_function(recon_batch, data, mu, logvar)
-        Cross = criterion(pred, labels)
-        loss = KLD + args.lumbda_max * BCE + args.gamma * Cross
+        KLD, MSE, c = loss_function(recon_x, x, pred, y, mu, logvar, num_z)       
+        loss = KLD + args.lumbda_max * MSE + args.gamma * c
         loss.backward()
         train_loss += loss.item()
         optimizer.step()
 
-def test(loader):
+def test(loader, num_z):
     args.model.eval()
     #test_loss = 0
     test_BCE, test_KLD, test_C, total, correct= 0., 0., 0., 0, 0
@@ -153,26 +165,33 @@ def test(loader):
                 labels = labels.cuda()
             #data = Variable(data, volatile=True)
             recon_batch, mu, logvar, pred = args.model(data)
+            
+            #y = th.cat([y]*nz)
+            #predicted = pred.argmax(dim=1, keepdim=True)
+            #ac = (predicted.eq(y.view_as(predicted)).sum().item())/nz
 
             _, predicted = torch.max(pred.data, 1)
-            total += labels.size(0)
-            correct += (predicted == labels).sum().item()
+            ll = torch.cat([labels]*num_z)
+            total += ll.size(0)
+            correct += (predicted == ll).sum().item()
 
-            BCE, KLD = loss_function(recon_batch, data, mu, logvar)
-            Cross = criterion(pred, labels)
+            #BCE, KLD = loss_function(recon_batch, data, mu, logvar)
+            #Cross = criterion(pred, labels)
+            KLD, MSE, c = loss_function(recon_batch, x, pred, y, mu, logvar, num_z)   
 
-            test_BCE += BCE.item()
+            test_MSE += MSE.item()
             test_KLD += KLD.item()
-            test_C += Cross.item()
+            test_C += c.item()
            
-        test_BCE /= total
-        test_KLD /= total
+        test_BCE /= (total /num_z)
+        test_KLD /= (total /num_z)
         #test_C /= len(test_loader.dataset)
-        test_C /= total
+        test_C /= (total /num_z)
 
-    return test_KLD, test_BCE, test_C
+    return test_KLD, test_BCE, test_C, correct/total
     
 def transfer(epoch):   
+    num_z = args.num_z
     args.model.train()
     for ( d1, d2 ) in zip ( source_train_loader,  target_train_loader):
         #beta_learning_rate(optimizer, args.itr_in_epoch, args.num_epoch, epoch, args.itr)
@@ -183,14 +202,16 @@ def transfer(epoch):
         optimizer.zero_grad()     
         
         recon1, mu1, logvar1, pred1 = args.model(x1)
-        BCE1, KLD1 = loss_function(recon1, x1, mu1, logvar1)
-        Cross1 = criterion(pred1, y1)
-        loss1 = KLD1 + args.lumbda * BCE1 + args.gamma * Cross1
+        KLD1, MSE1, c1 = loss_function(recon1, x1, pred1, y1, mu1, logvar1, num_z)   
+        #BCE1, KLD1 = loss_function(recon1, x1, mu1, logvar1)
+        #Cross1 = criterion(pred1, y1)
+        loss1 = KLD1 + args.lumbda * MSE1 + args.gamma * c1
         
         recon2, mu2, logvar2, pred2 = args.model(x2)
-        BCE2, KLD2 = loss_function(recon2, x2, mu2, logvar2)
-        Cross2 = criterion(pred2, y2)
-        loss2 = KLD2 + args.lumbda * BCE2 + args.gamma * Cross2
+        KLD2, BCE2, c2 = loss_function(recon2, x2, pred2, y2, mu2, logvar2, num_z)   
+        #BCE2, KLD2 = loss_function(recon2, x2, mu2, logvar2)
+        #Cross2 = criterion(pred2, y2)
+        loss2 = KLD2 + args.lumbda * MSE2 + args.gamma * c2
         
         loss = ( 1 - args.r ) * loss1 + args.r * loss2
         loss.backward()      
@@ -245,6 +266,7 @@ def beta_learning_rate(optimizer, itr_in_epoch, num_epoch, epoch, itr):
         
 args.lumbda_max, args.lumbda_min, args.gamma= 2., 0.5, 5.
 args.l_list, args.g_list, args.C_list, args.r_list = [args.lumbda_max], [args.gamma], [], [0.]
+
 #pretrain model on source domain
 for epoch in range(1, 10):
     args.count = 0 
