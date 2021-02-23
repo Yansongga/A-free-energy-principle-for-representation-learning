@@ -48,6 +48,7 @@ parser.add_argument('--outf', default='.', help='folder to output images and mod
 args = parser.parse_args(args=[])
 #print('where')
 args.cuda = not args.no_cuda and torch.cuda.is_available()
+arg.num_z = 8
 #args.cuda = cuda(2)
 
 
@@ -87,19 +88,10 @@ def loss_function(recon_x, x, pred, y, mu, logvar, num_z):
     c = criterion(pred, yy)
     return KLD, MSE, c/num_z
 
-# Reconstruction + KL divergence losses summed over all elements and batch
-##def loss_function(recon_x, x, mu, logvar):
-    # print(recon_x.size(), x.size())
-#    BCE = F.binary_cross_entropy(recon_x.view(-1, 784), x.view(-1, 784), size_average=False)
-    # see Appendix B from VAE paper:
-    # Kingma and Welling. Auto-Encoding Variational Bayes. ICLR, 2014
-    # https://arxiv.org/abs/1312.6114
-    # 0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
-#    KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
- #   return BCE, KLD
+
     
     
-########
+#splliting the dataset into source and target
 def data_split(domain, index):
     domain.targets = torch.tensor( domain.targets )
     for k in range( len(index) ):
@@ -166,10 +158,7 @@ def test(loader, num_z):
             #data = Variable(data, volatile=True)
             recon_batch, mu, logvar, pred = args.model(data)
             
-            #y = th.cat([y]*nz)
-            #predicted = pred.argmax(dim=1, keepdim=True)
-            #ac = (predicted.eq(y.view_as(predicted)).sum().item())/nz
-
+            
             _, predicted = torch.max(pred.data, 1)
             ll = torch.cat([labels]*num_z)
             total += ll.size(0)
@@ -219,27 +208,7 @@ def transfer(epoch):
         args.itr += 1
         
         
-def train_beta(epoch):
-    args.model.train()
-    train_loss = 0
-    for batch_idx, (data, labels) in enumerate(source_train_loader):
-        #args.count += 1
-        beta_learning_rate(optimizer, args.count, args.num_epoch, epoch, args.n)
-        data = Variable(data)
-        if args.cuda:
-            data = data.cuda()
-            labels = labels.cuda()
-        optimizer.zero_grad()
 
-        recon_batch, mu, logvar, pred = args.model(data)
-        BCE, KLD = loss_function(recon_batch, data, mu, logvar)
-        Cross = criterion(pred, labels)
-        loss = KLD + args.lumbda_max * BCE + args.gamma * Cross
-        loss.backward()
-        train_loss += loss.item()
-        optimizer.step()
-        
-        args.n += 1
         
 #counting number of updates in each epoch across transfer learning
 count = 0 
@@ -248,20 +217,7 @@ for ( d1, d2 ) in zip ( source_train_loader,  target_train_loader):
 args.itr_in_epoch = count
 print( args.itr_in_epoch, 'iterations in one epoch')
 
-####beta learning rate schedule
-def beta_learning_rate(optimizer, itr_in_epoch, num_epoch, epoch, itr):
-    ita = 8e-3
-    alpha, beta = 2, 5
-    s = alpha + beta
-    iters = itr + epoch * itr_in_epoch
-    num_iters = num_epoch * itr_in_epoch
-    x = iters / num_iters
-    peak = ( alpha ** alpha ) * (  beta ** beta ) / ( s ** s )
-    lr_beta_rate =  ita / peak * ( x ** alpha ) * ( ( 1 - x ) ** beta ) + 1e-5
-    for param_group in optimizer.param_groups:
-        param_group['lr'] = lr_beta_rate 
-    if itr == int(itr_in_epoch-1):
-        print( lr_beta_rate, 'learning rate at epoch', epoch )
+
         
         
 args.lumbda_max, args.lumbda_min, args.gamma= 2., 0.5, 5.
@@ -271,10 +227,11 @@ args.l_list, args.g_list, args.C_list, args.r_list = [args.lumbda_max], [args.ga
 for epoch in range(1, 10):
     args.count = 0 
     train(epoch)
-    _, _, C = test(source_test_loader)
+    _, _, C,ac = test(source_test_loader, args.num_z)
     print('====> Source Domain Test Classification Loss: {:.4f}'.format(C))
+    print('====> Source Domain Test Classification Accurancy: {:.4f}'.format(ac))
 
-_, _, args.C0 = test(source_test_loader)
+_, _, args.C0, _ = test(source_test_loader, args.num_z)
 args.C_list.append( args.C0 )
 args.step, args.lumbda = 0, args.lumbda_max
 args.num_step, args.num_epoch = 25, 8
@@ -282,8 +239,8 @@ args.num_step, args.num_epoch = 25, 8
 #####An equilibrium process for transfer learning: keepliing the classicifation loss
 for k in range( args.num_step ): 
     args.r = ( k +1 )/args.num_step 
-    _, _, C1 = test(source_test_loader)
-    _, _, C2 = test(target_test_loader)
+    _, _, C1, _ = test(source_test_loader)
+    _, _, C2, _ = test(target_test_loader)
     C_check = ( 1 - args.r ) * C1 + args.r * C2
     
     substep = 0 
