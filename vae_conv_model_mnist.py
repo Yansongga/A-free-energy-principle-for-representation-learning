@@ -101,7 +101,7 @@ class VAE(nn.Module):
      # muli-sampling z with size = self.num_z. 
     def reparameterize(self, mu, logvar):
         std =  torch.exp(0.5*logvar)
-        z = [mu + std* ( torch.randn_like(logvar).cuda(3) ) for i in range(self.num_z)] #sampling for self.num_z times and catche them.
+        z = [mu + std* ( torch.randn_like(logvar).cuda() ) for i in range(self.num_z)] #sampling for self.num_z times and catche them.
         #z = [mu + std* ( torch.randn_like(logvar).to(self.dev) ) for i in range(self.num_z)] #sampling for self.num_z times and catche them.
         z = torch.cat(z)  
         return z
