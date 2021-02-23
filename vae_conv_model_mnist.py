@@ -19,7 +19,7 @@ ndf = 64
 nc = 1
 
 class VAE(nn.Module):
-    def __init__(self, dev, nz = 8):
+    def __init__(self, nz = 8):
         super(VAE, self).__init__()
 
         self.have_cuda = False
@@ -101,7 +101,8 @@ class VAE(nn.Module):
      # muli-sampling z with size = self.num_z. 
      def reparameterize(self, mu, logvar):
         std =  torch.exp(0.5*logvar)
-        z = [mu + std* ( torch.randn_like(logvar).to(self.dev) ) for i in range(self.num_z)] #sampling for self.num_z times and catche them.
+        z = [mu + std* ( torch.randn_like(logvar).cuda() ) for i in range(self.num_z)] #sampling for self.num_z times and catche them.
+        #z = [mu + std* ( torch.randn_like(logvar).to(self.dev) ) for i in range(self.num_z)] #sampling for self.num_z times and catche them.
         z = torch.cat(z)  
         return z
 
