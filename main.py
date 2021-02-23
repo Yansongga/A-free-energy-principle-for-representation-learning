@@ -276,8 +276,8 @@ for k in range( args.num_step ):
             args.itr = 0 
             transfer(epoch, args.num_z)
             
-        _, _, C1 = test(source_test_loader,  args.num_z)
-        _, _, C2 = test(target_test_loader,  args.num_z)
+        _, _, C1, _ = test(source_test_loader,  args.num_z)
+        _, _, C2, _= test(target_test_loader,  args.num_z)
         C_check = ( 1 - args.r ) * C1 + args.r * C2
         substep += 1 
 
