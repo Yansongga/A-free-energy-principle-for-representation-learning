@@ -19,11 +19,11 @@ ndf = 64
 nc = 1
 
 class VAE(nn.Module):
-    def __init__(self, nz):
+    def __init__(self, nz = 8 ):
         super(VAE, self).__init__()
 
         self.have_cuda = False
-        self.nz = nz
+        self.num_z = nz
 
         self.encoder = nn.Sequential(
             # input is (nc) x 28 x 28
@@ -96,15 +96,22 @@ class VAE(nn.Module):
         deconv_input = deconv_input.view(-1,1024,1,1)
         # print("deconv_input", deconv_input.size())
         return self.decoder(deconv_input)
+    
+     # muli-sampling z with size = self.num_z. 
+     def reparameterize(self, mu, logvar):
+        std =  torch.exp(0.5*logvar)
+        z = [mu + std* ( torch.randn_like(logvar).to(self.dev) ) for i in range(self.num_z)] #sampling for self.num_z times and catche them.
+        z = torch.cat(z)  
+        return z
 
-    def reparametrize(self, mu, logvar):
-        std = logvar.mul(0.5).exp_()
-        if self.have_cuda:
-            eps = torch.cuda.FloatTensor(std.size()).normal_()
-        else:
-            eps = torch.FloatTensor(std.size()).normal_()
-        eps = Variable(eps)
-        return eps.mul(std).add_(mu)
+    #def reparametrize(self, mu, logvar):
+    #    std = logvar.mul(0.5).exp_()
+    #    if self.have_cuda:
+    #        eps = torch.cuda.FloatTensor(std.size()).normal_()
+    #    else:
+   #         eps = torch.FloatTensor(std.size()).normal_()
+   #     eps = Variable(eps)
+   #     return eps.mul(std).add_(mu)
 
     def forward(self, x):
         # print("x", x.size())
