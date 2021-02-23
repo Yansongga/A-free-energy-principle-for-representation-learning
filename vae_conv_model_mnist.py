@@ -120,8 +120,8 @@ class VAE(nn.Module):
         z = self.reparametrize(mu, logvar)
         
         ###prediction
-        #pred = self.fc5(z)
-        pred = self.fc5(mu)
+        pred = self.fc5(z)
+        #pred = self.fc5(mu)
         # print("z", z.size())
         decoded = self.decode(z)
         # print("decoded", decoded.size())
