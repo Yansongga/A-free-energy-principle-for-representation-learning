@@ -75,3 +75,40 @@ def imshow(img):
     npimg = img.numpy()
     plt.imshow(np.transpose(npimg, (0,1)))
     plt.show()
+    
+def train_beta(epoch):
+    args.model.train()
+    train_loss = 0
+    for batch_idx, (data, labels) in enumerate(source_train_loader):
+        #args.count += 1
+        beta_learning_rate(optimizer, args.count, args.num_epoch, epoch, args.n)
+        data = Variable(data)
+        if args.cuda:
+            data = data.cuda()
+            labels = labels.cuda()
+        optimizer.zero_grad()
+
+        recon_batch, mu, logvar, pred = args.model(data)
+        BCE, KLD = loss_function(recon_batch, data, mu, logvar)
+        Cross = criterion(pred, labels)
+        loss = KLD + args.lumbda_max * BCE + args.gamma * Cross
+        loss.backward()
+        train_loss += loss.item()
+        optimizer.step()
+        
+        args.n += 1
+        
+####beta learning rate schedule
+def beta_learning_rate(optimizer, itr_in_epoch, num_epoch, epoch, itr):
+    ita = 8e-3
+    alpha, beta = 2, 5
+    s = alpha + beta
+    iters = itr + epoch * itr_in_epoch
+    num_iters = num_epoch * itr_in_epoch
+    x = iters / num_iters
+    peak = ( alpha ** alpha ) * (  beta ** beta ) / ( s ** s )
+    lr_beta_rate =  ita / peak * ( x ** alpha ) * ( ( 1 - x ) ** beta ) + 1e-5
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = lr_beta_rate 
+    if itr == int(itr_in_epoch-1):
+        print( lr_beta_rate, 'learning rate at epoch', epoch )
