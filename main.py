@@ -73,7 +73,7 @@ args.model = model.VAE()
 
 args.model.have_cuda = args.cuda
 if args.cuda:
-    args.model.cuda(3)
+    args.model.cuda()
 
 #criterion = nn.CrossEntropyLoss()
 criterion = torch.nn.CrossEntropyLoss( size_average=False, reduction='sum')
@@ -139,8 +139,8 @@ def train(epoch, num_z):
         args.count += 1
         data = Variable(data)
         if args.cuda:
-            data = data.cuda(3)
-            labels = labels.cuda(3)
+            data = data.cuda()
+            labels = labels.cuda()
         optimizer.zero_grad()
 
         recon_batch, mu, logvar, pred = args.model(data)
@@ -157,8 +157,8 @@ def test(loader, num_z):
     with torch.no_grad():
         for i, (data, labels) in enumerate(loader):
             if args.cuda:
-                data = data.cuda(3)
-                labels = labels.cuda(3)
+                data = data.cuda()
+                labels = labels.cuda()
             #data = Variable(data, volatile=True)
             recon_batch, mu, logvar, pred = args.model(data)
             
@@ -191,7 +191,7 @@ def transfer(epoch, num_z):
         x1, y1 = d1
         x2, y2 = d2
         if args.cuda:
-            x1, y1, x2, y2 = x1.cuda(3), y1.cuda(3), x2.cuda(3), y2.cuda(3)
+            x1, y1, x2, y2 = x1.cuda(), y1.cuda(), x2.cuda(), y2.cuda()
         optimizer.zero_grad()     
         
         recon1, mu1, logvar1, pred1 = args.model(x1)
